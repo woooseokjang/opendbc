@@ -10,6 +10,8 @@ from opendbc.car.honda.values import CAR, DBC, STEER_THRESHOLD, HONDA_BOSCH, HON
                                                  HondaFlags, CruiseButtons, CruiseSettings, GearShifter, CarControllerParams
 from opendbc.car.interfaces import CarStateBase
 
+from opendbc.sunnypilot.car.honda.carstate_ext import CarStateExt
+
 TransmissionType = structs.CarParams.TransmissionType
 ButtonType = structs.CarState.ButtonEvent.Type
 
@@ -18,9 +20,10 @@ BUTTONS_DICT = {CruiseButtons.RES_ACCEL: ButtonType.accelCruise, CruiseButtons.D
 SETTINGS_BUTTONS_DICT = {CruiseSettings.DISTANCE: ButtonType.gapAdjustCruise, CruiseSettings.LKAS: ButtonType.lkas}
 
 
-class CarState(CarStateBase):
-  def __init__(self, CP):
-    super().__init__(CP)
+class CarState(CarStateBase, CarStateExt):
+  def __init__(self, CP, CP_SP):
+    CarStateBase.__init__(self, CP, CP_SP)
+    CarStateExt.__init__(self, CP, CP_SP)
     can_define = CANDefine(DBC[CP.carFingerprint][Bus.pt])
 
     if CP.transmissionType != TransmissionType.manual:
@@ -48,14 +51,17 @@ class CarState(CarStateBase):
     # When available we use cp.vl["CAR_SPEED"]["ROUGH_CAR_SPEED_2"] to populate vEgoCluster
     # However, on cars without a digital speedometer this is not always present (HRV, FIT, CRV 2016, ILX and RDX)
     self.dash_speed_seen = False
+    self.is_metric = False
+    self.v_cruise_factor = 1.
 
-  def update(self, can_parsers) -> structs.CarState:
+  def update(self, can_parsers) -> tuple[structs.CarState, structs.CarStateSP]:
     cp = can_parsers[Bus.pt]
     cp_cam = can_parsers[Bus.cam]
     if self.CP.enableBsm:
       cp_body = can_parsers[Bus.body]
 
     ret = structs.CarState()
+    ret_sp = structs.CarStateSP()
 
     # car params
     v_weight_v = [0., 1.]  # don't trust smooth speed at low values to avoid premature zero snapping
@@ -68,7 +74,8 @@ class CarState(CarStateBase):
     self.cruise_buttons = cp.vl["SCM_BUTTONS"]["CRUISE_BUTTONS"]
 
     # used for car hud message
-    self.is_metric = not cp.vl["CAR_SPEED"]["IMPERIAL_UNIT"]
+    # TODO: find CAR_SPEED for HONDA_ODYSSEY_TWN or use ACC_HUD w/ detection
+    self.is_metric = self.CP.carFingerprint in (CAR.HONDA_ODYSSEY_TWN,) or not cp.vl["CAR_SPEED"]["IMPERIAL_UNIT"]
     self.v_cruise_factor = CV.MPH_TO_MS if self.dynamic_v_cruise_units and not self.is_metric else CV.KPH_TO_MS
 
     # ******************* parse out can *******************
@@ -127,10 +134,11 @@ class CarState(CarStateBase):
 
     ret.espDisabled = cp.vl["VSA_STATUS"]["ESP_DISABLED"] != 0
 
-    self.dash_speed_seen = self.dash_speed_seen or cp.vl["CAR_SPEED"]["ROUGH_CAR_SPEED_2"] > 1e-3
-    if self.dash_speed_seen:
-      conversion = CV.KPH_TO_MS if self.is_metric else CV.MPH_TO_MS
-      ret.vEgoCluster = cp.vl["CAR_SPEED"]["ROUGH_CAR_SPEED_2"] * conversion
+    if self.CP.carFingerprint not in (CAR.HONDA_ODYSSEY_TWN,):
+      self.dash_speed_seen = self.dash_speed_seen or cp.vl["CAR_SPEED"]["ROUGH_CAR_SPEED_2"] > 1e-3
+      if self.dash_speed_seen:
+        conversion = CV.KPH_TO_MS if self.is_metric else CV.MPH_TO_MS
+        ret.vEgoCluster = cp.vl["CAR_SPEED"]["ROUGH_CAR_SPEED_2"] * conversion
 
     ret.steeringAngleDeg = cp.vl["STEERING_SENSORS"]["STEER_ANGLE"]
     ret.steeringRateDeg = cp.vl["STEERING_SENSORS"]["STEER_ANGLE_RATE"]
@@ -219,9 +227,11 @@ class CarState(CarStateBase):
       *create_button_events(self.cruise_setting, prev_cruise_setting, SETTINGS_BUTTONS_DICT),
     ]
 
-    return ret
+    CarStateExt.update(self, ret, can_parsers)
 
-  def get_can_parsers(self, CP):
+    return ret, ret_sp
+
+  def get_can_parsers(self, CP, CP_SP):
     parsers = {
       Bus.pt: CANParser(DBC[CP.carFingerprint][Bus.pt], [], CanBus(CP).pt),
       Bus.cam: CANParser(DBC[CP.carFingerprint][Bus.pt], [], CanBus(CP).camera),

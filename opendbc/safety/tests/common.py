@@ -10,6 +10,8 @@ from opendbc.can import CANPacker
 from opendbc.safety import ALTERNATIVE_EXPERIENCE
 from opendbc.safety.tests.libsafety import libsafety_py
 
+from opendbc.safety.tests.mads_common import MadsSafetyTestBase
+
 MAX_WRONG_COUNTERS = 5
 MAX_SAMPLE_VALS = 6
 VEHICLE_SPEED_FACTOR = 1000
@@ -72,7 +74,7 @@ def add_regen_tests(cls):
 
 
 class SafetyTestBase(unittest.TestCase):
-  safety: libsafety_py.LibSafety
+  safety: libsafety_py.LibSafety | None
 
   @classmethod
   def setUpClass(cls):
@@ -182,13 +184,14 @@ class LongitudinalGasBrakeSafetyTest(SafetyTestBase, abc.ABC):
   MIN_GAS: int = 0
   MAX_GAS: int | None = None
   INACTIVE_GAS = 0
-  MIN_POSSIBLE_GAS: int = 0.
+  MIN_POSSIBLE_GAS: int = 0
   MAX_POSSIBLE_GAS: int | None = None
 
   def test_gas_brake_limits_correct(self):
     self.assertIsNotNone(self.MAX_POSSIBLE_BRAKE)
     self.assertIsNotNone(self.MAX_POSSIBLE_GAS)
 
+    assert self.MAX_BRAKE is not None and self.MAX_GAS is not None
     self.assertGreater(self.MAX_BRAKE, self.MIN_BRAKE)
     self.assertGreater(self.MAX_GAS, self.MIN_GAS)
 
@@ -659,7 +662,7 @@ class VehicleSpeedSafetyTest(SafetyTestBase):
 class AngleSteeringSafetyTest(VehicleSpeedSafetyTest):
 
   STEER_ANGLE_MAX: float = 300
-  STEER_ANGLE_TEST_MAX: float = None
+  STEER_ANGLE_TEST_MAX: float | None = None
   DEG_TO_CAN: float
   ANGLE_RATE_BP: list[float]
   ANGLE_RATE_UP: list[float]  # windup limit
@@ -808,7 +811,7 @@ class AngleSteeringSafetyTest(VehicleSpeedSafetyTest):
 
 
 class SafetyTest(SafetyTestBase):
-  TX_MSGS: list[list[int]] | None = None
+  TX_MSGS: list[list[int]] = []
   SCANNED_ADDRS = [*range(0x800),                      # Entire 11-bit CAN address space
                    *range(0x18DA00F1, 0x18DB00F1, 0x100),   # 29-bit UDS physical addressing
                    *range(0x18DB00F1, 0x18DC00F1, 0x100),   # 29-bit UDS functional addressing
@@ -886,13 +889,18 @@ class SafetyTest(SafetyTestBase):
             if {attr, current_test}.issubset({'TestVolkswagenPqSafety', 'TestVolkswagenPqStockSafety', 'TestVolkswagenPqLongSafety'}):
               continue
             if {attr, current_test}.issubset({'TestGmCameraSafety', 'TestGmCameraLongitudinalSafety', 'TestGmAscmSafety',
-                                              'TestGmCameraEVSafety', 'TestGmCameraLongitudinalEVSafety', 'TestGmAscmEVSafety'}):
+                                              'TestGmCameraEVSafety', 'TestGmCameraLongitudinalEVSafety', 'TestGmAscmEVSafety',
+                                              'TestGmCameraNonACCSafety', 'TestGmCameraEVNonACCSafety'}):
               continue
             if attr.startswith('TestFord') and current_test.startswith('TestFord'):
               continue
             if attr.startswith('TestHyundaiCanfd') and current_test.startswith('TestHyundaiCanfd'):
               continue
             if {attr, current_test}.issubset({'TestHyundaiLongitudinalSafety', 'TestHyundaiLongitudinalSafetyCameraSCC', 'TestHyundaiSafetyFCEVLong'}):
+              continue
+            base_tests = {'TestHyundaiLongitudinalSafety', 'TestHyundaiLongitudinalSafetyCameraSCC', 'TestHyundaiSafetyFCEVLong',
+                          'TestHyundaiLongitudinalESCCSafety'}
+            if any(attr.startswith(test) for test in base_tests) and any(current_test.startswith(test) for test in base_tests):
               continue
             volkswagen_shared = ('TestVolkswagenMqb', 'TestVolkswagenMlb')
             if attr.startswith(volkswagen_shared) and current_test.startswith(volkswagen_shared):
@@ -938,7 +946,7 @@ class SafetyTest(SafetyTestBase):
 
 
 @add_regen_tests
-class CarSafetyTest(SafetyTest):
+class CarSafetyTest(SafetyTest, MadsSafetyTestBase):
   STANDSTILL_THRESHOLD: float = 0.0
   GAS_PRESSED_THRESHOLD = 0
   RELAY_MALFUNCTION_ADDRS: dict[int, tuple[int, ...]] | None = None
@@ -1122,6 +1130,8 @@ class CarSafetyTest(SafetyTest):
   def test_safety_tick(self):
     self.safety.set_timer(int(2e6))
     self.safety.set_controls_allowed(True)
+    self.safety.set_controls_allowed_lat(True)
     self.safety.safety_tick_current_safety_config()
     self.assertFalse(self.safety.get_controls_allowed())
+    self.assertFalse(self.safety.get_controls_allowed_lat())
     self.assertFalse(self.safety.safety_config_valid())

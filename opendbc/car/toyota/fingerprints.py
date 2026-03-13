@@ -2,6 +2,9 @@
 from opendbc.car.structs import CarParams
 from opendbc.car.toyota.values import CAR
 
+from opendbc.sunnypilot.car.fingerprints_ext import merge_fw_versions
+from opendbc.sunnypilot.car.toyota.fingerprints_ext import FW_VERSIONS_EXT
+
 Ecu = CarParams.Ecu
 
 FW_VERSIONS = {
@@ -1439,21 +1442,26 @@ FW_VERSIONS = {
   CAR.LEXUS_GS_F: {
     (Ecu.engine, 0x7e0, None): [
       b'\x0233075200\x00\x00\x00\x00\x00\x00\x00\x00530B9000\x00\x00\x00\x00\x00\x00\x00\x00',
+      b'\x02330Y8000\x00\x00\x00\x00\x00\x00\x00\x00A4701000\x00\x00\x00\x00\x00\x00\x00\x00',
     ],
     (Ecu.abs, 0x7b0, None): [
       b'F152630700\x00\x00\x00\x00\x00\x00',
+      b'F152630400\x00\x00\x00\x00\x00\x00',
     ],
     (Ecu.dsu, 0x791, None): [
       b'881513016200\x00\x00\x00\x00',
+      b'881513011300\x00\x00\x00\x00',
     ],
     (Ecu.eps, 0x7a1, None): [
       b'8965B30551\x00\x00\x00\x00\x00\x00',
+      b'8965B30431\x00\x00\x00\x00\x00\x00',
     ],
     (Ecu.fwdRadar, 0x750, 0xf): [
       b'8821F4702000\x00\x00\x00\x00',
     ],
     (Ecu.fwdCamera, 0x750, 0x6d): [
       b'8646F3002100\x00\x00\x00\x00',
+      b'8646F3001200\x00\x00\x00\x00',
     ],
   },
   CAR.LEXUS_NX: {
@@ -1859,4 +1867,26 @@ FW_VERSIONS = {
       b'\x028646F5205200\x00\x00\x00\x008646G5202200\x00\x00\x00\x00',
     ],
   },
+  CAR.LEXUS_LS: {
+    (Ecu.abs, 0x7b0, None): [
+      b'F152650290\x00\x00\x00\x00\x00\x00',
+    ],
+    (Ecu.dsu, 0x791, None): [
+      b'881515003400\x00\x00\x00\x00',
+    ],
+    (Ecu.eps, 0x7a1, None): [
+      b'8965B50022\x00\x00\x00\x00\x00\x00',
+    ],
+    (Ecu.engine, 0x700, None): [
+      b'\x028966350K7200\x00\x00\x00\x00896655066200\x00\x00\x00\x00',
+    ],
+    (Ecu.fwdRadar, 0x750, 0xf): [
+      b'8821F4702300\x00\x00\x00\x00',
+    ],
+    (Ecu.fwdCamera, 0x750, 0x6d): [
+      b'8646F5001200\x00\x00\x00\x00',
+    ],
+  },
 }
+
+FW_VERSIONS = merge_fw_versions(FW_VERSIONS, FW_VERSIONS_EXT)
