@@ -34,10 +34,7 @@ class CarController(CarControllerBase):
 
     # EPS disengages on steering override, activation sequence 2->3->4 to re-engage
     # STATUS  -  0: UNAVAILABLE, 1: UNSELECTED, 2: READY, 3: AUTHORIZED, 4: ACTIVE
-    cruise_enabled = CS.out.cruiseState.enabled
-    if not cruise_enabled:
-      self.status = 2
-    elif not CC.latActive:
+    if not CC.latActive:
       self.status = 2
     elif not CS.eps_active and not CS.out.steeringPressed:
       self.status = 2 if self.status == 4 else self.status + 1
@@ -104,7 +101,8 @@ class CarController(CarControllerBase):
         counter = (msg['COUNTER'] + 1) % 16
         can_sends.append(create_resume_acc(self.packer, counter, status, msg))
 
-    can_sends.append(create_lka_steering(self.packer, CC.latActive, apply_angle, self.status, cruise_enabled))
+    cruise_enabled = CS.out.cruiseState.enabled
+    can_sends.append(create_lka_steering(self.packer, CC.latActive, apply_angle, self.status, cruise_enabled, CS.stock_lka_drive))
     self.apply_angle_last = apply_angle
 
     new_actuators = actuators.as_builder()
