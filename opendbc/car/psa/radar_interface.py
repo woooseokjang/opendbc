@@ -38,14 +38,19 @@ class RadarInterface(RadarInterfaceBase):
 
     if not self.rcp.can_valid:
       ret.errors.canError = True
+      return ret
 
     msg = self.rcp.vl[RADAR_MSG_NAME]
 
     sensor_state = int(msg['ARTIV_SENSOR_STATE'])
     target_detected = bool(msg['TARGET_DETECTED'])
 
+    # sensor not active (initializing, fault, etc.) — report temporary unavailable, not canError
     if sensor_state != SENSOR_STATE_ACTIVE:
-      ret.errors.canError = True
+      ret.errors.radarUnavailableTemporary = True
+      self.pts.clear()
+      ret.points = []
+      return ret
 
     if target_detected:
       if 0 not in self.pts:
